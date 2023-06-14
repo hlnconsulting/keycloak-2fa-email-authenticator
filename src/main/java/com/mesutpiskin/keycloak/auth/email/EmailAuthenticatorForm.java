@@ -1,10 +1,19 @@
 package com.mesutpiskin.keycloak.auth.email;
 
-import lombok.extern.jbosslog.JBossLog;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
+
+import javax.ws.rs.core.MultivaluedMap;
+
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.AuthenticationFlowException;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.credential.CredentialProvider;
+import org.keycloak.credential.OTPCredentialProvider;
+import org.keycloak.credential.OTPCredentialProviderFactory;
 import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
@@ -15,80 +24,83 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
+import lombok.extern.jbosslog.JBossLog;
 
 @JBossLog
-public class EmailAuthenticatorForm implements Authenticator {
-
+public class EmailAuthenticatorForm implements Authenticator
+{
     static final String ID = "demo-email-code-form";
 
     public static final String EMAIL_CODE = "emailCode";
 
     private final KeycloakSession session;
 
-    public EmailAuthenticatorForm(KeycloakSession session) {
+    public EmailAuthenticatorForm(final KeycloakSession session)
+    {
         this.session = session;
     }
 
     @Override
-    public void authenticate(AuthenticationFlowContext context) {
+    public void authenticate(final AuthenticationFlowContext context)
+    {
         challenge(context, null);
     }
 
-    private void challenge(AuthenticationFlowContext context, FormMessage errorMessage) {
-
+    private void challenge(final AuthenticationFlowContext context, final FormMessage errorMessage)
+    {
         generateAndSendEmailCode(context);
 
-        LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
-        if (errorMessage != null) {
+        final LoginFormsProvider form = context.form().setExecution(context.getExecution().getId());
+        if (errorMessage != null)
             form.setErrors(List.of(errorMessage));
-        }
 
-        Response response = form.createForm("email-code-form.ftl");
-        context.challenge(response);
+        context.challenge(form.createForm("email-code-form.ftl"));
     }
 
-    private void generateAndSendEmailCode(AuthenticationFlowContext context) {
+    private void generateAndSendEmailCode(final AuthenticationFlowContext context)
+    {
 
-        if (context.getAuthenticationSession().getAuthNote(EMAIL_CODE) != null) {
+        if (context.getAuthenticationSession().getAuthNote(EMAIL_CODE) != null)
+        {
             // skip sending email code
             return;
         }
 
-        int emailCode = ThreadLocalRandom.current().nextInt(99999999);
+        final int emailCode = ThreadLocalRandom.current().nextInt(99999999);
         sendEmailWithCode(context.getRealm(), context.getUser(), String.valueOf(emailCode));
         context.getAuthenticationSession().setAuthNote(EMAIL_CODE, Integer.toString(emailCode));
     }
 
     @Override
-    public void action(AuthenticationFlowContext context) {
-        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
-        if (formData.containsKey("resend")) {
+    public void action(final AuthenticationFlowContext context)
+    {
+        final MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+        if (formData.containsKey("resend"))
+        {
             resetEmailCode(context);
             challenge(context, null);
             return;
         }
 
-        if (formData.containsKey("cancel")) {
+        if (formData.containsKey("cancel"))
+        {
             resetEmailCode(context);
             context.resetFlow();
             return;
         }
 
         boolean valid;
-        try {
-            int givenEmailCode = Integer.parseInt(formData.getFirst(EMAIL_CODE));
-            valid = validateCode(context, givenEmailCode);
-        } catch (NumberFormatException e) {
+        try
+        {
+            valid = validateCode(context, Integer.parseInt(formData.getFirst(EMAIL_CODE)));
+        }
+        catch (final NumberFormatException e)
+        {
             valid = false;
         }
 
-        if (!valid) {
+        if (!valid)
+        {
             context.getEvent().error(Errors.INVALID_USER_CREDENTIALS);
             challenge(context, new FormMessage(Messages.INVALID_ACCESS_CODE));
             return;
@@ -98,54 +110,69 @@ public class EmailAuthenticatorForm implements Authenticator {
         context.success();
     }
 
-    private void resetEmailCode(AuthenticationFlowContext context) {
+    private void resetEmailCode(final AuthenticationFlowContext context)
+    {
         context.getAuthenticationSession().removeAuthNote(EMAIL_CODE);
     }
 
-    private boolean validateCode(AuthenticationFlowContext context, int givenCode) {
-        int emailCode = Integer.parseInt(context.getAuthenticationSession().getAuthNote(EMAIL_CODE));
-        return givenCode == emailCode;
+    private boolean validateCode(final AuthenticationFlowContext context, final int givenCode)
+    {
+        return givenCode == Integer.parseInt(context.getAuthenticationSession().getAuthNote(EMAIL_CODE));
     }
 
     @Override
-    public boolean requiresUser() {
+    public boolean requiresUser()
+    {
         return true;
     }
 
     @Override
-    public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-        return true;
+    public boolean configuredFor(final KeycloakSession session, final RealmModel realm, final UserModel user)
+    {
+        return !user.credentialManager().isConfiguredFor(getCredentialProvider(session).getType());
+    }
+
+    public OTPCredentialProvider getCredentialProvider(final KeycloakSession session)
+    {
+        return (OTPCredentialProvider) session.getProvider(CredentialProvider.class, OTPCredentialProviderFactory.PROVIDER_ID);
     }
 
     @Override
-    public void setRequiredActions(KeycloakSession session, RealmModel realm, UserModel user) {
+    public void setRequiredActions(final KeycloakSession session, final RealmModel realm, final UserModel user)
+    {
         // NOOP
     }
 
     @Override
-    public void close() {
+    public void close()
+    {
         // NOOP
     }
 
-    private void sendEmailWithCode(RealmModel realm, UserModel user, String code) {
-        if (user.getEmail() == null) {
+    private void sendEmailWithCode(final RealmModel realm, final UserModel user, final String code)
+    {
+        if (user.getEmail() == null)
+        {
             log.warnf("Could not send access code email due to missing email. realm=%s user=%s", realm.getId(), user.getUsername());
             throw new AuthenticationFlowException(AuthenticationFlowError.INVALID_USER);
         }
 
-        Map<String, Object> mailBodyAttributes = new HashMap<>();
+        final Map<String, Object> mailBodyAttributes = new HashMap<>();
         mailBodyAttributes.put("username", user.getUsername());
         mailBodyAttributes.put("code", code);
 
-        String realmName = realm.getDisplayName() != null ? realm.getDisplayName() : realm.getName();
-        List<Object> subjectParams = List.of(realmName);
-        try {
-            EmailTemplateProvider emailProvider = session.getProvider(EmailTemplateProvider.class);
+        final List<Object> subjectParams = List.of(realm.getDisplayName() != null ? realm.getDisplayName() : realm.getName());
+
+        try
+        {
+            final EmailTemplateProvider emailProvider = session.getProvider(EmailTemplateProvider.class);
             emailProvider.setRealm(realm);
             emailProvider.setUser(user);
             // Don't forget to add the welcome-email.ftl (html and text) template to your theme.
             emailProvider.send("emailCodeSubject", subjectParams, "code-email.ftl", mailBodyAttributes);
-        } catch (EmailException eex) {
+        }
+        catch (final EmailException eex)
+        {
             log.errorf(eex, "Failed to send access code email. realm=%s user=%s", realm.getId(), user.getUsername());
         }
     }

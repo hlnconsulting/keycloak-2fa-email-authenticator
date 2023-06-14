@@ -1,6 +1,7 @@
 package com.mesutpiskin.keycloak.auth.email;
 
-import com.google.auto.service.AutoService;
+import java.util.List;
+
 import org.keycloak.Config;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.AuthenticatorFactory;
@@ -9,73 +10,84 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.provider.ProviderConfigProperty;
 
-import java.util.List;
+import com.google.auto.service.AutoService;
 
 @AutoService(AuthenticatorFactory.class)
-public class EmailAuthenticatorFormFactory implements AuthenticatorFactory {
+public class EmailAuthenticatorFormFactory implements AuthenticatorFactory
+{
+    public static final AuthenticationExecutionModel.Requirement[] REQUIREMENT_CHOICES =
+            { AuthenticationExecutionModel.Requirement.REQUIRED, AuthenticationExecutionModel.Requirement.ALTERNATIVE,
+                    AuthenticationExecutionModel.Requirement.DISABLED };
 
     @Override
-    public String getDisplayType() {
+    public String getDisplayType()
+    {
         return "Email OTP";
     }
 
     @Override
-    public String getReferenceCategory() {
+    public String getReferenceCategory()
+    {
         return null;
     }
 
     @Override
-    public boolean isConfigurable() {
+    public boolean isConfigurable()
+    {
         return false;
     }
 
-    public static final AuthenticationExecutionModel.Requirement[] REQUIREMENT_CHOICES = {
-            AuthenticationExecutionModel.Requirement.REQUIRED, AuthenticationExecutionModel.Requirement.ALTERNATIVE,
-            AuthenticationExecutionModel.Requirement.DISABLED
-    };
-
     @Override
-    public AuthenticationExecutionModel.Requirement[] getRequirementChoices() {
+    public AuthenticationExecutionModel.Requirement[] getRequirementChoices()
+    {
         return REQUIREMENT_CHOICES;
     }
 
     @Override
-    public boolean isUserSetupAllowed() {
+    public boolean isUserSetupAllowed()
+    {
         return false;
     }
 
     @Override
-    public String getHelpText() {
+    public String getHelpText()
+    {
         return "Email otp authenticator.";
     }
 
     @Override
-    public List<ProviderConfigProperty> getConfigProperties() {
+    public List<ProviderConfigProperty> getConfigProperties()
+    {
         return null;
     }
 
     @Override
-    public void close() {
+    public void close()
+    {
         // NOOP
     }
 
     @Override
-    public Authenticator create(KeycloakSession session) {
+    public Authenticator create(final KeycloakSession session)
+    {
         return new EmailAuthenticatorForm(session);
     }
 
     @Override
-    public void init(Config.Scope config) {
+    public void init(final Config.Scope config)
+    {
         // NOOP
     }
 
     @Override
-    public void postInit(KeycloakSessionFactory factory) {
+    public void postInit(final KeycloakSessionFactory factory)
+    {
         // NOOP
     }
 
     @Override
-    public String getId() {
+    public String getId()
+    {
         return EmailAuthenticatorForm.ID;
     }
 }
